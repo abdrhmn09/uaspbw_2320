@@ -2,92 +2,81 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Pegawai;
-use App\Models\PeriodePenilaian;
-use App\Models\SasaranKinerja;
 use App\Models\Penilaian;
-use App\Models\PenilaianPerilaku;
+use App\Models\SasaranKinerja;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
 
 class PenilaianController extends Controller
 {
     public function index()
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $pegawai = Pegawai::where('user_id', $user->id)->first();
 
-        // Ambil daftar bawahan untuk dinilai
-        $bawahan = Pegawai::where('atasan_id', $pegawai->id)
-            ->with(['jabatan', 'unitKerja', 'sasaranKinerja.periodePenilaian'])
-            ->get();
+        // Ambil daftar pegawai yang dinilai (bawahan)
+        $daftarPenilaian = SasaranKinerja::with(['pegawai', 'periodePenilaian', 'penilaian'])
+            ->whereHas('pegawai', function ($query) use ($pegawai) {
+                $query->where('atasan_id', $pegawai->id);
+            })
+            ->where('status', 'disetujui')
+            ->get()
+            ->groupBy('pegawai_id');
 
         return Inertia::render('Penilaian/Index', [
-            'bawahan' => $bawahan
+            'daftarPenilaian' => $daftarPenilaian
         ]);
     }
 
     public function create($pegawai_id)
     {
-        $pegawai = Pegawai::with(['sasaranKinerja.indikatorKinerja.capaianKinerja'])
+        $user = Auth::user();
+        $penilai = Pegawai::where('user_id', $user->id)->first();
+
+        $pegawai = Pegawai::with(['jabatan', 'unitKerja'])
+            ->where('atasan_id', $penilai->id)
             ->findOrFail($pegawai_id);
 
-        $periodeTerbaru = PeriodePenilaian::where('status', 'aktif')->first();
+        $sasaranKinerja = SasaranKinerja::with(['indikatorKinerja.capaianKinerja'])
+            ->where('pegawai_id', $pegawai_id)
+            ->where('status', 'disetujui')
+            ->get();
 
         return Inertia::render('Penilaian/Create', [
             'pegawai' => $pegawai,
-            'periode' => $periodeTerbaru
+            'sasaranKinerja' => $sasaranKinerja
         ]);
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'pegawai_id' => 'required|exists:pegawais,id',
-            'periode_penilaian_id' => 'required|exists:periode_penilaians,id',
-            'penilaian_sasaran' => 'required|array',
-            'penilaian_perilaku' => 'required|array'
+            'penilaian' => 'required|array',
+            'penilaian.*.sasaran_kinerja_id' => 'required|exists:sasaran_kinerjas,id',
+            'penilaian.*.nilai_capaian' => 'required|numeric|min:0|max:100',
+            'penilaian.*.komentar' => 'nullable|string'
         ]);
 
-        $user = auth()->user();
+        $user = Auth::user();
         $penilai = Pegawai::where('user_id', $user->id)->first();
 
-        // Simpan penilaian sasaran kinerja
-        foreach ($request->penilaian_sasaran as $sasaran_id => $nilai) {
-            Penilaian::create([
-                'sasaran_kinerja_id' => $sasaran_id,
-                'penilai_id' => $penilai->id,
-                'nilai_capaian' => $nilai['nilai_capaian'],
-                'komentar' => $nilai['komentar'] ?? null,
-                'tanggal_penilaian' => now()
-            ]);
+        foreach ($request->penilaian as $nilai) {
+            Penilaian::updateOrCreate(
+                [
+                    'sasaran_kinerja_id' => $nilai['sasaran_kinerja_id'],
+                    'penilai_id' => $penilai->id
+                ],
+                [
+                    'nilai_capaian' => $nilai['nilai_capaian'],
+                    'komentar' => $nilai['komentar'],
+                    'tanggal_penilaian' => now()
+                ]
+            );
         }
 
-        // Simpan penilaian perilaku
-        $perilaku = $request->penilaian_perilaku;
-        $rata_rata = (
-            $perilaku['orientasi_pelayanan'] +
-            $perilaku['integritas'] +
-            $perilaku['komitmen'] +
-            $perilaku['disiplin'] +
-            $perilaku['kerjasama'] +
-            ($perilaku['kepemimpinan'] ?? 0)
-        ) / (isset($perilaku['kepemimpinan']) ? 6 : 5);
-
-        PenilaianPerilaku::create([
-            'pegawai_id' => $request->pegawai_id,
-            'periode_penilaian_id' => $request->periode_penilaian_id,
-            'orientasi_pelayanan' => $perilaku['orientasi_pelayanan'],
-            'integritas' => $perilaku['integritas'],
-            'komitmen' => $perilaku['komitmen'],
-            'disiplin' => $perilaku['disiplin'],
-            'kerjasama' => $perilaku['kerjasama'],
-            'kepemimpinan' => $perilaku['kepemimpinan'] ?? null,
-            'nilai_rata_rata' => $rata_rata,
-            'komentar' => $perilaku['komentar'] ?? null
-        ]);
-
-        return redirect()->route('penilaian.index')->with('success', 'Penilaian berhasil disimpan');
+        return redirect()->route('penilaian.index')
+            ->with('success', 'Penilaian berhasil disimpan');
     }
 }
