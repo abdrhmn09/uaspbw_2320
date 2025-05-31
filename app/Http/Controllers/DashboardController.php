@@ -71,7 +71,7 @@ class DashboardController extends Controller
             }
         }
 
-        return Inertia::render('Dashboard', [
+        return Inertia::render('dashboard', [
             'stats' => [
                 'totalSasaran' => $totalSasaran,
                 'sasaranDisetujui' => $sasaranDisetujui,
