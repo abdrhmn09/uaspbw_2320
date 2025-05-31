@@ -19,15 +19,22 @@ class DashboardController extends Controller
         $pegawai = Pegawai::where('user_id', $user->id)->first();
 
         // Statistik untuk pegawai
-        $totalSasaran = SasaranKinerja::where('pegawai_id', $pegawai->id)->count();
-        $sasaranDisetujui = SasaranKinerja::where('pegawai_id', $pegawai->id)
-            ->where('status', 'disetujui')->count();
-        $sasaranMenunggu = SasaranKinerja::where('pegawai_id', $pegawai->id)
-            ->where('status', 'diajukan')->count();
+        $totalSasaran = 0;
+        $sasaranDisetujui = 0;
+        $sasaranMenunggu = 0;
+
+        if ($pegawai) {
+            $totalSasaran = SasaranKinerja::where('pegawai_id', $pegawai->id)->count();
+            $sasaranDisetujui = SasaranKinerja::where('pegawai_id', $pegawai->id)
+                ->where('status', 'disetujui')->count();
+
+            $sasaranMenunggu = SasaranKinerja::where('pegawai_id', $pegawai->id)
+                ->where('status', 'diajukan')->count();
+        }
 
         // Jika atasan, tambah statistik bawahan
         $bawahanMenungguPersetujuan = 0;
-        if ($pegawai->bawahan()->exists()) {
+        if ($pegawai && $pegawai->bawahan()->exists()) {
             $bawahanMenungguPersetujuan = SasaranKinerja::whereHas('pegawai', function ($query) use ($pegawai) {
                 $query->where('atasan_id', $pegawai->id);
             })->where('status', 'diajukan')->count();
@@ -37,7 +44,7 @@ class DashboardController extends Controller
         $periodeAktif = PeriodePenilaian::where('status', 'aktif')->first();
         $progressCapaian = [];
 
-        if ($periodeAktif) {
+        if ($periodeAktif && $pegawai) {
             $sasaranPeriodeAktif = SasaranKinerja::with(['indikatorKinerja.capaianKinerja'])
                 ->where('pegawai_id', $pegawai->id)
                 ->where('periode_penilaian_id', $periodeAktif->id)

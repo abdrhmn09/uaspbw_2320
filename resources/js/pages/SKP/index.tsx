@@ -100,12 +100,18 @@ export default function SKPIndex({ sasaranKinerja, pegawai }: Props) {
                                             Indikator: {skp.indikator_kinerja_count || 0} item
                                         </span>
                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm">
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="outline" size="sm">
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
+                                            <Link href={route('skp.show', skp.id)}>
+                                                <Button variant="outline" size="sm">
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                            </Link>
+                                            {skp.status === 'draft' && (
+                                                <Link href={route('skp.edit', skp.id)}>
+                                                    <Button variant="outline" size="sm">
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            )}
                                             <Button variant="outline" size="sm" className="text-red-600">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>

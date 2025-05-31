@@ -73,4 +73,83 @@ class PegawaiController extends Controller
         return redirect()->route('pegawai.index')
             ->with('success', 'Data pegawai berhasil ditambahkan');
     }
+
+    public function show($id)
+    {
+        $pegawai = Pegawai::with(['jabatan', 'unitKerja', 'atasan', 'user', 'bawahan'])
+            ->findOrFail($id);
+
+        return Inertia::render('Pegawai/Show', [
+            'pegawai' => $pegawai
+        ]);
+    }
+
+    public function edit($id)
+    {
+        $pegawai = Pegawai::with(['jabatan', 'unitKerja', 'atasan', 'user'])
+            ->findOrFail($id);
+
+        $jabatan = Jabatan::all();
+        $unitKerja = UnitKerja::all();
+        $atasan = Pegawai::with('jabatan')->where('id', '!=', $id)->get();
+
+        return Inertia::render('Pegawai/Edit', [
+            'pegawai' => $pegawai,
+            'jabatan' => $jabatan,
+            'unitKerja' => $unitKerja,
+            'atasan' => $atasan
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $pegawai = Pegawai::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $pegawai->user_id,
+            'nip' => 'required|string|unique:pegawais,nip,' . $id,
+            'nama' => 'required|string|max:255',
+            'jabatan_id' => 'required|exists:jabatans,id',
+            'unit_kerja_id' => 'required|exists:unit_kerjas,id',
+            'atasan_id' => 'nullable|exists:pegawais,id',
+            'pangkat' => 'required|string|max:100',
+            'golongan' => 'required|string|max:50'
+        ]);
+
+        // Update user
+        $pegawai->user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+        ]);
+
+        // Update pegawai
+        $pegawai->update([
+            'nip' => $request->nip,
+            'nama' => $request->nama,
+            'jabatan_id' => $request->jabatan_id,
+            'unit_kerja_id' => $request->unit_kerja_id,
+            'atasan_id' => $request->atasan_id,
+            'pangkat' => $request->pangkat,
+            'golongan' => $request->golongan,
+            'email' => $request->email
+        ]);
+
+        return redirect()->route('pegawai.index')
+            ->with('success', 'Data pegawai berhasil diperbarui');
+    }
+
+    public function destroy($id)
+    {
+        $pegawai = Pegawai::findOrFail($id);
+
+        // Hapus user terkait
+        $pegawai->user->delete();
+
+        // Hapus pegawai
+        $pegawai->delete();
+
+        return redirect()->route('pegawai.index')
+            ->with('success', 'Data pegawai berhasil dihapus');
+    }
 }
